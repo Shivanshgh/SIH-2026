@@ -1,0 +1,103 @@
+{
+  "evaluation": "Synthetic holdout only; not a field-performance estimate",
+  "seed": 2026,
+  "training_sample_count": 900,
+  "split_strategy": "stratified by modulation; each row is one independently generated capture",
+  "synthetic_feature_window_samples": 512,
+  "synthetic_holdout_sample_count": 300,
+  "combined_model_synthetic_holdout_accuracy": 0.7233333333333334,
+  "synthetic_only_baseline_accuracy": 0.7233333333333334,
+  "classes": [
+    "BPSK",
+    "QPSK",
+    "8-PSK",
+    "2-FSK",
+    "16-QAM"
+  ],
+  "macro_average": {
+    "precision": 0.732999278276111,
+    "recall": 0.7233333333333334,
+    "f1-score": 0.7272212528688795
+  },
+  "confusion_matrix": [
+    [
+      56,
+      0,
+      2,
+      0,
+      2
+    ],
+    [
+      1,
+      33,
+      24,
+      1,
+      1
+    ],
+    [
+      1,
+      28,
+      26,
+      1,
+      4
+    ],
+    [
+      2,
+      1,
+      3,
+      51,
+      3
+    ],
+    [
+      0,
+      4,
+      5,
+      0,
+      51
+    ]
+  ],
+  "classification_report": {
+    "BPSK": {
+      "precision": 0.9333333333333333,
+      "recall": 0.9333333333333333,
+      "f1-score": 0.9333333333333333,
+      "support": 60
+    },
+    "QPSK": {
+      "precision": 0.5,
+      "recall": 0.55,
+      "f1-score": 0.5238095238095238,
+      "support": 60
+    },
+    "8-PSK": {
+      "precision": 0.43333333333333335,
+      "recall": 0.43333333333333335,
+      "f1-score": 0.43333333333333335,
+      "support": 60
+    },
+    "2-FSK": {
+      "precision": 0.9622641509433962,
+      "recall": 0.85,
+      "f1-score": 0.9026548672566371,
+      "support": 60
+    },
+    "16-QAM": {
+      "precision": 0.8360655737704918,
+      "recall": 0.85,
+      "f1-score": 0.8429752066115703,
+      "support": 60
+    }
+  },
+  "accuracy_by_snr_db": {
+    "-2": 0.6181818181818182,
+    "2": 0.6226415094339622,
+    "6": 0.7884615384615384,
+    "10": 0.7619047619047619,
+    "14": 0.8333333333333334,
+    "18": 0.74
+  },
+  "model_file": "models\\modulation_model.json",
+  "training_sources": [
+    "local synthetic generator"
+  ]
+}

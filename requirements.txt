@@ -1,0 +1,9 @@
+# SpectraSense - Requirements for SIH 2026 (Problem Statement 26147 - NTRO)
+# Windows Desktop Signal Workflow Orchestration & Evidence Layer
+
+# Newer Qt wheels fail to load QtWidgets on some Windows PCs.
+PyQt6==6.7.1
+PyQt6-Qt6==6.7.1
+numpy>=1.24.0
+scipy>=1.11.0
+matplotlib>=3.8.0

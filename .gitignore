@@ -1,0 +1,27 @@
+# Python environments and generated files
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.log
+
+# Packaging and generated reports
+.build-tools/
+.build-pyqt67/
+build/
+dist/
+release/
+reports/
+*.spec
+SpectraSense-improved.zip
+
+# Front-end dependencies/build output
+node_modules/
+coverage/
+.vercel/
+
+# Local secrets and OS files
+.env*
+!.env.example
+.DS_Store
+Thumbs.db
