@@ -8,6 +8,26 @@ import json
 import datetime
 
 
+class SignalJSONEncoder(json.JSONEncoder):
+    """Allow profiles to contain NumPy scalars/arrays without export failures."""
+
+    def default(self, value):
+        # NumPy scalar types (including int32) expose item(); arrays expose tolist().
+        item = getattr(value, "item", None)
+        if callable(item):
+            try:
+                return item()
+            except (TypeError, ValueError):
+                pass
+        tolist = getattr(value, "tolist", None)
+        if callable(tolist):
+            try:
+                return tolist()
+            except (TypeError, ValueError):
+                pass
+        return super().default(value)
+
+
 def build_signal_profile(file_meta, preprocess_meta, features, hypotheses, validation_result):
     """
     Constructs a comprehensive, standardized Structured Signal Profile dictionary.
@@ -63,7 +83,7 @@ def build_signal_profile(file_meta, preprocess_meta, features, hypotheses, valid
 def export_profile_json(profile, filepath):
     """Exports profile to a formatted JSON file."""
     with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(profile, f, indent=2)
+        json.dump(profile, f, indent=2, cls=SignalJSONEncoder)
 
 
 def generate_profile_html(profile):

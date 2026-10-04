@@ -25,7 +25,7 @@ from PyQt6.QtGui import QAction, QFont, QColor
 
 from spectrasense.dsp.io import SignalFormat, infer_iq_format
 from spectrasense.engine.pipeline import SpectraSensePipeline
-from spectrasense.engine.profile import export_profile_json, generate_profile_html
+from spectrasense.engine.profile import SignalJSONEncoder, export_profile_json, generate_profile_html
 from spectrasense.gui.theme import DARK_STYLESHEET
 
 try:
@@ -505,7 +505,7 @@ class SpectraSenseMainWindow(QMainWindow):
             "fec_candidate_search": validation.get("fec_analysis", {}),
             "notice": "Supported candidate checks only; a match does not confirm framing or payload."
         }
-        self.txt_coding_demo.setPlainText(json.dumps(result, indent=2))
+        self.txt_coding_demo.setPlainText(json.dumps(result, indent=2, cls=SignalJSONEncoder))
         self.status_bar.showMessage(f"Coding checks shown for {os.path.basename(self.current_filepath)}.")
 
     def on_run_coding_demo(self):
@@ -513,7 +513,7 @@ class SpectraSenseMainWindow(QMainWindow):
         try:
             from spectrasense.engine.coding_demo import run_coding_demo
             result = run_coding_demo()
-            self.txt_coding_demo.setPlainText(json.dumps(result, indent=2))
+            self.txt_coding_demo.setPlainText(json.dumps(result, indent=2, cls=SignalJSONEncoder))
             self.status_bar.showMessage("Synthetic coding demo completed.")
         except Exception as exc:
             message = f"Coding demo failed: {exc}"
@@ -711,7 +711,7 @@ class SpectraSenseMainWindow(QMainWindow):
             ("Conclusive Profile Approved", "YES" if val.get("passed") else "NO (Honest Uncertainty)"),
             ("Recovered Bit Preview", val.get("recovered_bits_preview") or "Unavailable / unresolved"),
             ("Recovered Bit Count", str(val.get("recovered_bit_count", 0))),
-            ("Sync Word Candidates", json.dumps(val.get("sync_word_candidates", [])) or "[]"),
+            ("Sync Word Candidates", json.dumps(val.get("sync_word_candidates", []), cls=SignalJSONEncoder) or "[]"),
             ("FEC / Interleaver Search", self._fec_summary(val.get("fec_analysis", {}))),
             ("Reed–Solomon Search", self._rs_summary(val.get("fec_analysis", {}).get("reed_solomon", {}))),
             ("LDPC Matrix Search", self._ldpc_summary(val.get("fec_analysis", {}).get("ldpc", {}))),
@@ -763,7 +763,7 @@ class SpectraSenseMainWindow(QMainWindow):
 
     def populate_profile_tab(self, profile):
         import json
-        self.txt_profile.setPlainText(json.dumps(profile, indent=2))
+        self.txt_profile.setPlainText(json.dumps(profile, indent=2, cls=SignalJSONEncoder))
 
     def on_export_json(self):
         if not self.pipeline.profile:

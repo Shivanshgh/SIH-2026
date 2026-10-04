@@ -69,9 +69,7 @@ def get_ideal_constellation(modulation):
             for q in levels:
                 pts.append(complex(i * norm, q * norm))
         return pts
-    else:
-        # Default unit circle
-        return [1.0 + 0j, -1.0 + 0j, 0.0 + 1j, 0.0 - 1j]
+    return []
 
 
 def _recover_bit_preview(iq_data, modulation, sps, sample_rate, symbols=None):
@@ -175,6 +173,27 @@ def run_process_and_validate(iq_data, top_hypothesis, features, refinement_attem
             "passed": False
         }
         
+    # ML may propose families without a demodulator or bit mapping yet.
+    # Keep those candidates explicitly unverified instead of testing them as QPSK.
+    if mod_name not in {"BPSK", "QPSK", "8-PSK", "16-QAM", "2-FSK", "4-FSK"}:
+        return {
+            "status": "UNRESOLVED / INCONCLUSIVE",
+            "verdict": f"{mod_name} candidate; demodulation is not implemented",
+            "evm_percent": None,
+            "recovered_bits_preview": "",
+            "recovered_bit_count": 0,
+            "bit_recovery_method": "Not implemented for this modulation family",
+            "sync_word_candidates": [],
+            "fec_analysis": analyze_fec(""),
+            "refinement_count": refinement_attempt,
+            "processing_path_used": top_hypothesis.get("suggested_pipeline", "Candidate analysis only"),
+            "uncertainty_notes": [
+                f"{mod_name} is an ML candidate only; no supported demodulator or bit mapping is available.",
+                "No EVM, decoded bits, or payload verification is claimed."
+            ],
+            "passed": False
+        }
+
     # Estimate downsampled symbol constellation or FSK tone discriminator
     sps_val = features.get("samples_per_symbol", 8)
     sps = max(int(round(sps_val)), 2)
