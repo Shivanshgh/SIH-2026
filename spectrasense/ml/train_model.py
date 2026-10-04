@@ -26,14 +26,43 @@ except AttributeError:
 
 
 SAMPLE_RATE = 200_000
-MODULATIONS = ("BPSK", "QPSK", "8-PSK", "2-FSK", "16-QAM")
+MODULATIONS = ("BPSK", "QPSK", "8-PSK", "16-QAM", "64-QAM", "PAM4",
+              "2-FSK", "4-FSK", "CPFSK", "GFSK", "AM-DSB", "AM-SSB", "WBFM")
+
+
+def _rrc_shape(symbols, sps, rng, samples):
+    """Pulse-shape digital symbol streams with randomized root-raised-cosine filters."""
+    beta = float(rng.uniform(0.2, 0.7))
+    span = 6
+    t = np.arange(-span * sps // 2, span * sps // 2 + 1, dtype=float) / sps
+    taps = np.empty_like(t)
+    for i, value in enumerate(t):
+        if abs(value) < 1e-12:
+            taps[i] = 1 - beta + 4 * beta / np.pi
+        elif abs(abs(value) - 1 / (4 * beta)) < 1e-10:
+            taps[i] = beta / np.sqrt(2) * ((1 + 2 / np.pi) * np.sin(np.pi / (4 * beta)) +
+                                           (1 - 2 / np.pi) * np.cos(np.pi / (4 * beta)))
+        else:
+            taps[i] = (np.sin(np.pi * value * (1 - beta)) +
+                       4 * beta * value * np.cos(np.pi * value * (1 + beta))) / (
+                           np.pi * value * (1 - (4 * beta * value) ** 2))
+    taps /= np.sqrt(np.sum(taps ** 2))
+    upsampled = np.zeros(len(symbols) * sps, dtype=np.complex128)
+    upsampled[::sps] = symbols
+    shaped = np.convolve(upsampled, taps, mode="same")
+    start = int(rng.integers(sps))
+    shaped = shaped[start:start + samples]
+    if len(shaped) < samples:
+        shaped = np.pad(shaped, (0, samples - len(shaped)))
+    return shaped
 
 
 def synthesize(modulation, snr_db, rng, samples=FEATURE_WINDOW_SAMPLES):
     """Generate varied, labelled captures with phase/CFO and mild multipath."""
-    rates = {"BPSK": (8_000, 25_000), "QPSK": (8_000, 25_000),
-             "8-PSK": (8_000, 25_000), "2-FSK": (5_000, 15_000),
-             "16-QAM": (8_000, 25_000)}
+    rates = {name: (5_000, 25_000) for name in MODULATIONS}
+    rates.update({"2-FSK": (5_000, 15_000), "4-FSK": (5_000, 15_000),
+                  "CPFSK": (5_000, 15_000), "GFSK": (5_000, 15_000),
+                  "WBFM": (1_000, 8_000)})
     rate = int(rng.integers(*rates[modulation]))
     sps = SAMPLE_RATE // rate
     count = (samples + sps - 1) // sps
@@ -43,25 +72,45 @@ def synthesize(modulation, snr_db, rng, samples=FEATURE_WINDOW_SAMPLES):
         symbols = np.exp(1j * (np.pi / 4 + np.pi / 2 * rng.integers(0, 4, count)))
     elif modulation == "8-PSK":
         symbols = np.exp(1j * (rng.uniform(-np.pi, np.pi) + 2 * np.pi / 8 * rng.integers(0, 8, count)))
-    elif modulation == "16-QAM":
-        levels = np.array([-3, -1, 1, 3])
-        symbols = (rng.choice(levels, count) + 1j * rng.choice(levels, count)) / np.sqrt(10)
+    elif modulation in ("16-QAM", "64-QAM"):
+        levels = np.array([-3, -1, 1, 3]) if modulation == "16-QAM" else np.array([-7, -5, -3, -1, 1, 3, 5, 7])
+        symbols = (rng.choice(levels, count) + 1j * rng.choice(levels, count)) / np.sqrt(np.mean(levels ** 2) * 2)
+    elif modulation == "PAM4":
+        symbols = rng.choice(np.array([-3, -1, 1, 3]), count).astype(np.complex128) / np.sqrt(5)
+    elif modulation in ("AM-DSB", "AM-SSB", "WBFM"):
+        audio = np.repeat(rng.uniform(-1, 1, max(2, count)), sps)[:samples]
+        audio = np.convolve(audio, np.ones(min(sps, 16)) / min(sps, 16), mode="same")
+        if modulation == "AM-DSB":
+            base = (1 + rng.uniform(0.3, 0.95) * audio).astype(np.complex128)
+        elif modulation == "AM-SSB":
+            from scipy.signal import hilbert
+            base = (audio + 1j * np.imag(hilbert(audio))).astype(np.complex128)
+        else:
+            deviation = rng.uniform(1_500, 5_000)
+            base = np.exp(1j * 2 * np.pi * deviation * np.cumsum(audio) / SAMPLE_RATE)
+        symbols = None
     else:
-        symbols = np.ones(count, dtype=np.complex128)
+        symbols = None
 
     # Random fractional timing phase, then truncate to the fixed inference window.
-    timing = int(rng.integers(0, sps))
-    base = np.repeat(symbols, sps)[timing:timing + samples]
-    if len(base) < samples:
-        base = np.pad(base, (0, samples - len(base)), mode="wrap")
-    if modulation == "2-FSK":
-        bits = rng.integers(0, 2, count)
-        tones = np.repeat(np.where(bits > 0, 1.0, -1.0), sps)[timing:timing + samples]
-        if len(tones) < samples:
-            tones = np.pad(tones, (0, samples - len(tones)), mode="wrap")
-        deviation = float(rng.choice([rate / 2, rate]))
-        inst_freq = tones * deviation
-        phase = np.cumsum(2 * np.pi * inst_freq / SAMPLE_RATE)
+    if symbols is not None:
+        if modulation in ("BPSK", "QPSK", "8-PSK", "16-QAM", "64-QAM", "PAM4"):
+            base = _rrc_shape(symbols, sps, rng, samples)
+        else:
+            base = np.repeat(symbols, sps)[:samples]
+            if len(base) < samples:
+                base = np.pad(base, (0, samples - len(base)), mode="wrap")
+    if modulation in ("2-FSK", "4-FSK", "CPFSK", "GFSK"):
+        levels = np.array([-1.0, 1.0]) if modulation in ("2-FSK", "CPFSK", "GFSK") else np.array([-3., -1., 1., 3.])
+        tones = np.repeat(rng.choice(levels, count), sps)[:samples]
+        if modulation == "GFSK":
+            width = max(3, min(sps, 15))
+            tones = np.convolve(tones, np.ones(width) / width, mode="same")
+        deviation = rate / 2
+        if modulation == "2-FSK":
+            phase = 2 * np.pi * tones * deviation * (np.arange(samples) % sps) / SAMPLE_RATE
+        else:
+            phase = np.cumsum(2 * np.pi * tones * deviation / SAMPLE_RATE)
         base = np.exp(1j * phase)
 
     fc = float(rng.uniform(-45_000, 45_000))
@@ -70,8 +119,10 @@ def synthesize(modulation, snr_db, rng, samples=FEATURE_WINDOW_SAMPLES):
     drift = float(rng.uniform(-150, 150))
     iq = base * rng.uniform(0.3, 2.5) * np.exp(1j * (2 * np.pi * fc * t + np.pi * drift * t * t + phase0))
     # Mild two-path channel and gain variation prevent exact waveform memorization.
-    if rng.random() < 0.5:
-        iq = iq + rng.uniform(0.05, 0.2) * np.roll(iq, int(rng.integers(1, max(2, sps // 2))))
+    if rng.random() < 0.6:
+        delay = int(rng.integers(1, max(2, min(samples // 4, sps * 3))))
+        delayed = np.pad(iq[:-delay], (delay, 0))
+        iq = iq + rng.uniform(0.03, 0.3) * np.exp(1j * rng.uniform(-np.pi, np.pi)) * delayed
     power = float(np.mean(np.abs(iq) ** 2))
     noise_power = power / (10 ** (snr_db / 10))
     noise = np.sqrt(noise_power / 2) * (rng.standard_normal(samples) + 1j * rng.standard_normal(samples))
@@ -130,7 +181,10 @@ def read_radioml(path):
 def load_radioml_features(path, examples_per_snr, seed):
     dataset = read_radioml(path)
     rng = np.random.default_rng(seed + 1)
-    labels = {"BPSK": "BPSK", "QPSK": "QPSK", "QAM16": "16-QAM"}
+    labels = {"BPSK": "BPSK", "QPSK": "QPSK", "8PSK": "8-PSK",
+              "QAM16": "16-QAM", "QAM64": "64-QAM", "PAM4": "PAM4",
+              "BFSK": "2-FSK", "CPFSK": "CPFSK", "GFSK": "GFSK",
+              "AM-DSB": "AM-DSB", "AM-SSB": "AM-SSB", "WBFM": "WBFM"}
     train_rows, train_labels, train_snr = [], [], []
     test_rows, test_labels, test_snr = [], [], []
     for key, samples in dataset.items():
@@ -140,7 +194,7 @@ def load_radioml_features(path, examples_per_snr, seed):
             continue
         samples = np.asarray(samples)
         indices = rng.permutation(len(samples))[:min(examples_per_snr, len(samples))]
-        # Four independent 128-sample records form one 512-sample model window.
+        # Sixteen independent 128-sample records form one 2048-sample window.
         groups = [indices[i:i + FEATURE_WINDOW_SAMPLES // 128]
                   for i in range(0, len(indices) - (FEATURE_WINDOW_SAMPLES // 128) + 1,
                                  FEATURE_WINDOW_SAMPLES // 128)]
@@ -160,7 +214,7 @@ def load_radioml_features(path, examples_per_snr, seed):
             target_labels.append(labels[raw_label])
             target_snr.append(int(snr))
     if not train_rows or not test_rows:
-        raise ValueError("No supported RadioML classes found (expected BPSK, QPSK, QAM16)")
+        raise ValueError("No supported RadioML classes found")
     return (np.asarray(train_rows), np.asarray(train_labels), np.asarray(train_snr),
             np.asarray(test_rows), np.asarray(test_labels), np.asarray(test_snr))
 
@@ -194,13 +248,13 @@ def main():
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--output", default=os.path.join("models", "modulation_model.json"))
     parser.add_argument("--radioml", help="Path to RadioML2016.10a tar.bz2 archive or pickle")
-    parser.add_argument("--radioml-per-snr", type=int, default=30,
-                        help="examples per supported class and SNR (default: 30)")
+    parser.add_argument("--radioml-per-snr", type=int, default=64,
+                        help="examples per supported class and SNR (default: 64)")
     args = parser.parse_args()
     if args.per_class_snr < 2:
         parser.error("--per-class-snr must be at least 2")
-    if args.radioml_per_snr < 8:
-        parser.error("--radioml-per-snr must be at least 8 (two independent 512-sample windows)")
+    if args.radioml_per_snr < 32:
+        parser.error("--radioml-per-snr must be at least 32 (two independent 2048-sample windows)")
 
     x, y, snrs = build_dataset(args.per_class_snr, args.seed)
     rng = np.random.default_rng(args.seed)
@@ -268,7 +322,7 @@ def main():
             for snr in sorted(set(snr_test.tolist())) if np.any(snr_test == snr)
         },
         "model_file": os.path.relpath(output_path, os.getcwd()),
-        "training_sources": ["local synthetic generator"] + (["RadioML2016.10a (BPSK, QPSK, QAM16)"] if args.radioml else []),
+        "training_sources": ["local synthetic generator"] + (["RadioML2016.10a supported classes"] if args.radioml else []),
     }
     if radio_test is not None:
         radio_x, radio_y, radio_snr = radio_test

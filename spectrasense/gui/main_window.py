@@ -316,7 +316,7 @@ class SpectraSenseMainWindow(QMainWindow):
         self.tabs.addTab(self.profile_tab, "Stage 6: Structured Signal Profile")
 
         self.coding_tab = self.build_coding_demo_tab()
-        self.tabs.addTab(self.coding_tab, "Coding Demo (Synthetic)")
+        self.tabs.addTab(self.coding_tab, "Signal Coding Analysis")
 
         return workspace
 
@@ -458,17 +458,19 @@ class SpectraSenseMainWindow(QMainWindow):
     def build_coding_demo_tab(self):
         tab = QWidget()
         layout = QVBoxLayout(tab)
-        header = QLabel("KNOWN-PARAMETER CODING PIPELINE DEMONSTRATION")
+        header = QLabel("CURRENT SIGNAL CODING CHECK + SYNTHETIC DEMO")
         header.setStyleSheet("color: #38bdf8; font-weight: bold;")
         layout.addWidget(header)
         explanation = QLabel(
-            "Synthetic demonstration: rate-1/2 K=3 convolutional encoder, 8-row block interleaver, "
-            "simulated bit errors, de-interleaver, and Viterbi decoder. This does not infer coding "
-            "parameters or decode arbitrary captures."
+            "Analyze sync/FEC checks from the currently loaded signal, or run a separate known-parameter "
+            "synthetic demonstration. Real-signal coding matches are tentative."
         )
         explanation.setWordWrap(True)
         explanation.setStyleSheet("color: #94a3b8;")
         layout.addWidget(explanation)
+        signal_button = QPushButton("Analyze Loaded Signal")
+        signal_button.clicked.connect(self.on_analyze_loaded_signal_coding)
+        layout.addWidget(signal_button)
         run_button = QPushButton("Run synthetic coding demo")
         run_button.clicked.connect(self.on_run_coding_demo)
         layout.addWidget(run_button)
@@ -478,11 +480,46 @@ class SpectraSenseMainWindow(QMainWindow):
         layout.addWidget(self.txt_coding_demo)
         return tab
 
+    def on_analyze_loaded_signal_coding(self):
+        import json
+        if not self.current_filepath or self.pipeline.raw_iq is None:
+            self.txt_coding_demo.setPlainText("Load a signal and run the pipeline first.")
+            return
+        validation = self.pipeline.validation_result
+        if not validation:
+            self.txt_coding_demo.setPlainText("Run the pipeline on the loaded signal first.")
+            return
+        features = self.pipeline.features
+        top = self.pipeline.hypotheses[0] if self.pipeline.hypotheses else {}
+        result = {
+            "analysis": "Coding and synchronization checks for the loaded signal",
+            "source_file": os.path.basename(self.current_filepath),
+            "sample_rate_hz": self.pipeline.sample_rate,
+            "analyzed_samples": len(self.pipeline.raw_iq),
+            "leading_modulation_hypothesis": top.get("modulation", "Unknown"),
+            "estimated_snr_db": features.get("snr_db"),
+            "validation_status": validation.get("status"),
+            "recovered_bit_count": validation.get("recovered_bit_count", 0),
+            "bit_recovery_method": validation.get("bit_recovery_method", ""),
+            "sync_word_candidates": validation.get("sync_word_candidates", []),
+            "fec_candidate_search": validation.get("fec_analysis", {}),
+            "notice": "Supported candidate checks only; a match does not confirm framing or payload."
+        }
+        self.txt_coding_demo.setPlainText(json.dumps(result, indent=2))
+        self.status_bar.showMessage(f"Coding checks shown for {os.path.basename(self.current_filepath)}.")
+
     def on_run_coding_demo(self):
         import json
-        from spectrasense.engine.coding_demo import run_coding_demo
-        result = run_coding_demo()
-        self.txt_coding_demo.setPlainText(json.dumps(result, indent=2))
+        try:
+            from spectrasense.engine.coding_demo import run_coding_demo
+            result = run_coding_demo()
+            self.txt_coding_demo.setPlainText(json.dumps(result, indent=2))
+            self.status_bar.showMessage("Synthetic coding demo completed.")
+        except Exception as exc:
+            message = f"Coding demo failed: {exc}"
+            self.txt_coding_demo.setPlainText(message)
+            self.status_bar.showMessage(message)
+            QMessageBox.critical(self, "Coding Demo Error", message)
 
     def init_sample_signals(self):
         resource_root = getattr(sys, "_MEIPASS", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))

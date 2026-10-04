@@ -25,9 +25,9 @@ def run_coding_demo(seed=2026, payload_bits=96, flip_probability=0.035):
     uncoded_noisy = [bit ^ int(rng.random() < flip_probability) for bit in payload]
     terminated = payload + [0, 0]
     encoded = convolutional_encode(terminated)
-    interleaved = block_interleave(encoded, rows=8)
+    interleaved, interleaved_length = block_interleave(encoded, rows=8)
     noisy = [bit ^ int(rng.random() < flip_probability) for bit in interleaved]
-    restored = block_deinterleave(noisy, rows=8)[:len(encoded)]
+    restored = block_deinterleave(noisy, interleaved_length, rows=8)
     decoded = viterbi_decode(restored)[:payload_bits]
     coded_errors = sum(a != b for a, b in zip(decoded, payload))
     return {

@@ -27,6 +27,14 @@ def main():
             os.environ["PATH"] = qt_bin + os.pathsep + os.environ.get("PATH", "")
             _qt_dll_directory = os.add_dll_directory(qt_bin)
 
+    if "--coding-demo-self-test" in sys.argv[1:]:
+        try:
+            from spectrasense.engine.coding_demo import run_coding_demo
+            result = run_coding_demo()
+            return 0 if result["decoded_payload_bit_errors"] == 0 else 1
+        except Exception:
+            return 1
+
     if "--self-test" in sys.argv[1:]:
         from PyQt6 import QtCore
         from PyQt6.QtWidgets import QApplication

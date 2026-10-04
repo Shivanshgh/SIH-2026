@@ -17,8 +17,15 @@ MODULATION_CLASSES = [
     "QPSK",
     "8-PSK",
     "16-QAM",
+    "64-QAM",
+    "PAM4",
     "2-FSK",
     "4-FSK",
+    "CPFSK",
+    "GFSK",
+    "AM-DSB",
+    "AM-SSB",
+    "WBFM",
     "CW / Pure Carrier",
     "Unresolved / Noise"
 ]
@@ -155,8 +162,15 @@ def score_hypotheses(features, user_prior=None, ml_scores=None):
         "QPSK": "Costas Loop (4-Phase) -> Root-Raised-Cosine Matched Filter -> Gardner Sync -> 4-Quadrant Slicer",
         "8-PSK": "M-th Power Carrier Sync (M=8) -> Polyphase Clock Sync -> 8-Phase Sector Decision",
         "16-QAM": "CMA Adaptive Equalizer -> Decision-Directed Carrier Phase Loop -> 16-Grid Slicer",
+        "64-QAM": "Equalizer -> Carrier Recovery -> 64-Grid Slicer (candidate only)",
+        "PAM4": "Timing Recovery -> Four-Level Slicer (candidate only)",
         "2-FSK": "Discriminator / Quadrature Demodulator -> Dual-Tone Bandpass Bank -> Zero-Crossing Detector",
         "4-FSK": "Multi-tone Matched Filter Bank -> Maximum Likelihood Tone Estimator",
+        "CPFSK": "Continuous-Phase Frequency Discriminator (candidate only)",
+        "GFSK": "Gaussian Frequency Discriminator (candidate only)",
+        "AM-DSB": "Envelope Detector / Coherent AM Demodulator (candidate only)",
+        "AM-SSB": "SSB Product Detector (candidate only)",
+        "WBFM": "FM Discriminator -> De-emphasis (candidate only)",
         "CW / Pure Carrier": "Narrowband Bandpass Filter -> Frequency Tracking PLL -> Amplitude Demodulator",
         "Unresolved / Noise": "Coherent Integration / Pre-filtering Required -> Increase Observation Window"
     }

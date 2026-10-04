@@ -12,7 +12,9 @@ FEATURE_NAMES = (
     "bandwidth_3db_hz", "bandwidth_99_hz", "symbol_rate_baud",
     "symbol_rate_quality",
 )
-FEATURE_WINDOW_SAMPLES = 512
+# Longer captures stabilize spectral and cumulant features, especially for
+# higher-order PSK/QAM and low-SNR IQ. Inference remains capped at 32 windows.
+FEATURE_WINDOW_SAMPLES = 2048
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "models", "modulation_model.json")
 
 
